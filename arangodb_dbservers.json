@@ -1,0 +1,50 @@
+{
+  "id": "arangodbdbservers",
+  "cpus": 0.5,
+  "mem": 2048,
+  "disk": 2048,
+  "instances": 2,
+  "container": {
+    "docker": {
+      "image": "neunhoef/arangodb-marathon",
+      "network": "BRIDGE",
+      "forcePullImage": true,
+      "portMappings": [
+        {
+          "containerPort": 8529,
+          "hostPort": 0,
+          "protocol": "tcp"
+        }
+      ]
+    },
+    "type": "DOCKER",
+    "volumes": [
+      {
+        "hostPath": "data",
+        "containerPath": "/var/lib/arangodb3",
+        "mode": "RW"
+      },
+      {
+        "containerPath": "data",
+        "persistent": {
+          "size": 1024
+        },
+        "mode": "RW"
+      }
+    ]
+  },
+  "env": {
+    "AGENCY_SIZE": "3"
+  },
+  "constraints": [["hostname", "UNIQUE"]],
+  "labels": {},
+  "healthChecks":
+  [{"path": "/_api/version", "portIndex": 0, "protocol": "HTTP",
+    "gracePeriodSeconds": 300, "intervalSeconds": 30, "timeoutSeconds": 5, 
+    "maxConsecutiveFailures": 0, "ignoreHttp1xx": false }
+  ],
+  "residency": {
+    "taskLostBehaviour": "WAIT_FOREVER",
+    "relaunchEscalationTimeoutSeconds": 3600
+  }
+}

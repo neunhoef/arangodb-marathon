@@ -1,0 +1,31 @@
+{
+  "id": "arangodbcoordinators",
+  "cpus": 0.5,
+  "mem": 2048,
+  "disk": 1024,
+  "instances": 1,
+  "container": {
+    "docker": {
+      "image": "neunhoef/arangodb-marathon",
+      "network": "BRIDGE",
+      "forcePullImage": true,
+      "portMappings": [
+        {
+          "containerPort": 8529,
+          "hostPort": 0,
+          "protocol": "tcp"
+        }
+      ]
+    },
+    "type": "DOCKER"
+  },
+  "env": {
+    "AGENCY_SIZE": "3"
+  },
+  "labels": {},
+  "healthChecks":
+  [{"path": "/_api/version", "portIndex": 0, "protocol": "HTTP",
+    "gracePeriodSeconds": 300, "intervalSeconds": 30, "timeoutSeconds": 5, 
+    "maxConsecutiveFailures": 0, "ignoreHttp1xx": false }
+  ]
+}
