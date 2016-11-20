@@ -1,0 +1,21 @@
+Immediately:
+
+ - offer HTTP/REST service in framework
+ - offer shutdown method
+ - clean up persistent volumes and reservations
+ - coordinator label for MinuteMan
+
+Soon:
+
+ - scaling via UI: watch Agency
+
+Later:
+
+ - load balancing? something on public slaves?
+ - create setup with haproxy deployment via Marathon on public_slaves
+
+Challenges:
+
+ - stop agency from scaling?
+ - secondaries? -> more support from within ArangoDB, planned anyway
+

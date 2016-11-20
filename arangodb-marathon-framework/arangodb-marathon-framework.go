@@ -8,6 +8,7 @@ import (
   "fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -151,6 +152,23 @@ func checkDeployments() {
 	checkDeployment("coordinators", makeCoordinatorJSON)
 }
 
+func serveStatus(w http.ResponseWriter, r *http.Request) {
+}
+
+func serveShutdown(w http.ResponseWriter, r *http.Request) {
+}
+
+func serveHttp() {
+  http.HandleFunc("/v2/status", serveStatus)
+	http.HandleFunc("/v2/shutdown", serveShutdown)
+	port, found := os.LookupEnv("PORT0")
+	if !found {
+		port = "8000"
+	}
+	fmt.Println("Serving HTTP/REST API on port", port)
+	http.ListenAndServe("0.0.0.0:" + port, nil)
+}
+
 func main() {
 	flag.StringVar(&clusterName, "name", "arangodb", "name of ArangoDB cluster")
 	flag.StringVar(&marathonURL, "marathon", "http://marathon.mesos:8080",
@@ -178,6 +196,8 @@ func main() {
   flag.UintVar(&coordinatorNumber, "coordinatorNumber", 2,
 	             "Number of coordinators")
 	flag.Parse()
+
+	go serveHttp()
 
 	checkDeployments()
 	count := 0
