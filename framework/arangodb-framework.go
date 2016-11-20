@@ -118,7 +118,7 @@ func makeDBServerJSON() (bufAll bytes.Buffer) {
 }
 
 func checkDeployment(instancetype string, maker func() bytes.Buffer) error {
-	r, e := http.Get(marathonURL + "/v2/apps/" + clusterName)
+	r, e := http.Get(marathonURL + "/v2/apps/" + clusterName + instancetype)
 	if e != nil || r == nil {
 		fmt.Println("Error contacting Marathon for type", instancetype, ":", e)
 		return e
