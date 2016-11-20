@@ -1,0 +1,16 @@
+Immediately:
+
+ - Docker image
+ - test deployment of framework via Marathon
+ - offer HTTP/REST service in framework
+ - offer shutdown method
+ - stop agency from scaling
+
+Soon:
+
+ - scaling via UI: watch Agency
+ - coordinator label for MinuteMan
+
+Later:
+
+ - load balancing? something on public slaves?
