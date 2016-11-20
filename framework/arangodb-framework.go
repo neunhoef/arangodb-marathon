@@ -2,8 +2,13 @@ package main
 
 import (
 	"bytes"
+	//"encoding/json"
+	"errors"
 	"flag"
   "fmt"
+	"io/ioutil"
+	"net/http"
+	"time"
 )
 
 var clusterName string
@@ -51,11 +56,7 @@ var allSkeleton string = `{
       "gracePeriodSeconds": 300, "intervalSeconds": 30,
       "timeoutSeconds": 5, "maxConsecutiveFailures": 0,
       "ignoreHttp1xx": false }
-  ],
-  "residency": {
-    "relaunchEscalationTimeoutSeconds": 3600,
-    "taskLostBehavior": "WAIT_FOREVER"
-  }
+  ]%s
 }
 `
 
@@ -79,43 +80,69 @@ var volumeSkeleton string = `,
 var constraintSkeleton string = `"constraints": [["hostname", "UNIQUE"]],
   `
 
-func makeAgencyJSON() []byte {
-	bufAll := bytes.Buffer{}
+var residencySkeleton string = `,
+  "residency": {
+    "relaunchEscalationTimeoutSeconds": 3600,
+    "taskLostBehavior": "WAIT_FOREVER"
+  }
+`
+
+func makeAgencyJSON() (bufAll bytes.Buffer) {
+	bufAll = bytes.Buffer{}
 	bufVol := bytes.Buffer{}
 	fmt.Fprintf(&bufVol, volumeSkeleton, agentDiskLimit)
 	fmt.Fprintf(&bufAll, allSkeleton, clusterName, "agency", agentCPULimit,
 	            agentMemLimit, agentDiskLimit, agentNumber,
-							string(bufVol.Bytes()), agentNumber, constraintSkeleton);
-	return bufAll.Bytes()
+							string(bufVol.Bytes()), agentNumber, constraintSkeleton,
+						  residencySkeleton);
+	return
 }
 
-func makeCoordinatorJSON() []byte {
-	bufAll := bytes.Buffer{}
+func makeCoordinatorJSON() (bufAll bytes.Buffer) {
+	bufAll = bytes.Buffer{}
 	fmt.Fprintf(&bufAll, allSkeleton, clusterName, "coordinators",
 	            coordinatorCPULimit, coordinatorMemLimit, coordinatorDiskLimit,
-							coordinatorNumber, "", agentNumber, "");
-	return bufAll.Bytes()
+							coordinatorNumber, "", agentNumber, "", "");
+	return
 }
 
-func makeDBServerJSON() []byte {
-	bufAll := bytes.Buffer{}
+func makeDBServerJSON() (bufAll bytes.Buffer) {
+	bufAll = bytes.Buffer{}
 	bufVol := bytes.Buffer{}
 	fmt.Fprintf(&bufVol, volumeSkeleton, dbserverDiskLimit)
 	fmt.Fprintf(&bufAll, allSkeleton, clusterName, "dbservers", dbserverCPULimit,
 	            dbserverMemLimit, dbserverDiskLimit, dbserverNumber,
-							string(bufVol.Bytes()), agentNumber, constraintSkeleton);
-	return bufAll.Bytes()
+							string(bufVol.Bytes()), agentNumber, constraintSkeleton,
+						  residencySkeleton);
+	return
 }
 
-func checkDeployment(instancetype string, maker func() []byte) {
-	// GET $MARATHON/v2/apps/${NAME}${instancetype}
-	// if there: return
-	// make JSON using makerfunc
-	// POST $MARATHON/v2/apps
-	// if worked: return
-	// log error
-	fmt.Println(string(maker()))
-	return
+func checkDeployment(instancetype string, maker func() bytes.Buffer) error {
+	r, e := http.Get(marathonURL + "/v2/apps/" + clusterName)
+	if e != nil || r == nil {
+		fmt.Println("Error contacting Marathon for type", instancetype, ":", e)
+		return e
+	}
+	r.Body.Close()
+	if r.StatusCode == http.StatusOK {
+		fmt.Println("Found Marathon deployment for type", instancetype, ", good.")
+		return nil
+	}
+	json := maker()
+	fmt.Println("Trying to POST to Marathon:", string(json.Bytes()))
+	r, e = http.Post(marathonURL + "/v2/apps", "application/json", &json)
+	if e != nil || r == nil {
+		fmt.Println("Error POSTing to Marathon for type", instancetype, ":", e)
+		return e
+	}
+	body, _ := ioutil.ReadAll(r.Body)
+	r.Body.Close()
+	if r.StatusCode != http.StatusCreated {
+		fmt.Println("Error response from Marathon for type", instancetype, ":",
+		            r.StatusCode, string(body))
+		return errors.New("Error response from Marathon:" + string(body))
+	}
+	return nil
 }
 
 func checkDeployments() {
@@ -153,4 +180,10 @@ func main() {
 	flag.Parse()
 
 	checkDeployments()
+	count := 0
+	for {
+		time.Sleep(10000000000)
+		count++
+		fmt.Printf("Living %d\n", count)
+	}
 }
