@@ -42,7 +42,7 @@ var allSkeleton string = `{
         {
           "containerPort": 8529,
           "hostPort": 0,
-          "protocol": "tcp"
+          "protocol": "tcp"%s
         }
       ]
     },
@@ -51,7 +51,8 @@ var allSkeleton string = `{
   "env": {
     "AGENCY_SIZE": "%d"
   },
-  %s"labels": {},
+  %s"labels": {
+  },
   "healthChecks": [
     { "path": "/_api/version", "portIndex": 0, "protocol": "HTTP",
       "gracePeriodSeconds": 300, "intervalSeconds": 30,
@@ -88,12 +89,16 @@ var residencySkeleton string = `,
   }
 `
 
+var minuteManSkeleton string = `,
+          "labels": {"VIP_0": "%s:8529"},
+					"name": "%s"`
+
 func makeAgencyJSON() (bufAll bytes.Buffer) {
 	bufAll = bytes.Buffer{}
 	bufVol := bytes.Buffer{}
 	fmt.Fprintf(&bufVol, volumeSkeleton, agentDiskLimit)
 	fmt.Fprintf(&bufAll, allSkeleton, clusterName, "agency", agentCPULimit,
-	            agentMemLimit, agentDiskLimit, agentNumber,
+	            agentMemLimit, agentDiskLimit, agentNumber, "",
 							string(bufVol.Bytes()), agentNumber, constraintSkeleton,
 						  residencySkeleton);
 	return
@@ -101,9 +106,12 @@ func makeAgencyJSON() (bufAll bytes.Buffer) {
 
 func makeCoordinatorJSON() (bufAll bytes.Buffer) {
 	bufAll = bytes.Buffer{}
+	bufMin := bytes.Buffer{}
+	fmt.Fprintf(&bufMin, minuteManSkeleton, clusterName, clusterName)
 	fmt.Fprintf(&bufAll, allSkeleton, clusterName, "coordinators",
 	            coordinatorCPULimit, coordinatorMemLimit, coordinatorDiskLimit,
-							coordinatorNumber, "", agentNumber, "", "");
+							coordinatorNumber, string(bufMin.Bytes()), "", agentNumber,
+							"", "");
 	return
 }
 
@@ -112,7 +120,7 @@ func makeDBServerJSON() (bufAll bytes.Buffer) {
 	bufVol := bytes.Buffer{}
 	fmt.Fprintf(&bufVol, volumeSkeleton, dbserverDiskLimit)
 	fmt.Fprintf(&bufAll, allSkeleton, clusterName, "dbservers", dbserverCPULimit,
-	            dbserverMemLimit, dbserverDiskLimit, dbserverNumber,
+	            dbserverMemLimit, dbserverDiskLimit, dbserverNumber, "",
 							string(bufVol.Bytes()), agentNumber, constraintSkeleton,
 						  residencySkeleton);
 	return
@@ -153,6 +161,7 @@ func checkDeployments() {
 }
 
 func serveStatus(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(`{"ok": true}`))
 }
 
 func serveShutdown(w http.ResponseWriter, r *http.Request) {
@@ -196,6 +205,9 @@ func main() {
   flag.UintVar(&coordinatorNumber, "coordinatorNumber", 2,
 	             "Number of coordinators")
 	flag.Parse()
+	for len(clusterName) > 0 && clusterName[0] == '/' {
+		clusterName = clusterName[1:]
+	}
 
 	go serveHttp()
 
