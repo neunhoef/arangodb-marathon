@@ -16,18 +16,18 @@ AGENCY_SIZE=${AGENCY_SIZE:-3}
 MARATHON=${MARATHON:-"http://marathon.mesos:8080"}
 
 case "$MARATHON_APP_ID" in
-    *dbservers) 
-       CLUSTER_NAME=${MARATHON_APP_ID%dbservers}
+    */servers/dbservers) 
+       CLUSTER_NAME=${MARATHON_APP_ID%/servers/dbservers}
        TYPE=dbserver
        OPTION="--cluster.agency-endpoint"
        ;;
-    *coordinators)
-        CLUSTER_NAME=${MARATHON_APP_ID%coordinators}
+    */servers/coordinators)
+        CLUSTER_NAME=${MARATHON_APP_ID%/servers/coordinators}
         TYPE=coordinator
         OPTION="--cluster.agency-endpoint"
         ;;
-    *agency)
-        CLUSTER_NAME=${MARATHON_APP_ID%agency}
+    *agency/agents)
+        CLUSTER_NAME=${MARATHON_APP_ID%/agency/agents}
         TYPE=agent
         OPTION="--agency.endpoint"
         ;;
@@ -38,10 +38,10 @@ case "$MARATHON_APP_ID" in
         ;;
 esac
 
-CLUSTER_NAME=${CLUSTER_NAME#/}
+CLUSTER_NAME=${CLUSTER_NAME}
 echo CLUSTER_NAME=$CLUSTER_NAME
 
-AGENTS=$(/FindTasks -marathon $MARATHON -oneline -option=${OPTION} -prefix=tcp:// -minimum $AGENCY_SIZE ${CLUSTER_NAME}agency)
+AGENTS=$(/FindTasks -marathon $MARATHON -oneline -option=${OPTION} -prefix=tcp:// -minimum $AGENCY_SIZE ${CLUSTER_NAME}/agency/agents)
 
 echo Agents found: $AGENTS
 

@@ -1,0 +1,35 @@
+{
+  "id": "/arangodb-framework",
+  "cpus": 0.25,
+  "mem": 128,
+  "disk": 0,
+  "instances": 1,
+  "container": {
+    "docker": {
+      "image": "neunhoef/arangodb-marathon-framework",
+      "network": "HOST",
+      "forcePullImage": true
+    },
+    "type": "DOCKER"
+  },
+  "portDefinitions": [
+    {
+      "port": 0,
+      "name": "http",
+      "protocol": "tcp",
+      "labels": { "VIP_0": "arangodbframework:8000" }
+    }
+  ],
+  "healthChecks": [
+    {
+      "path": "/v2/status",
+      "portIndex": 0,
+      "protocol": "HTTP",
+      "gracePeriodSeconds": 300,
+      "intervalSeconds": 30,
+      "timeoutSeconds": 5,
+      "maxConsecutiveFailures": 0,
+      "ignoreHttp1xx": false
+    }
+  ]
+}

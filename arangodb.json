@@ -1,0 +1,160 @@
+{
+  "id": "/arangodb",
+  "groups": [
+    {
+      "id": "/arangodb/agency",
+      "apps": [
+        {
+          "id": "/arangodb/agency/agents",
+          "cpus": 0.25,
+          "mem": 1024,
+          "disk": 1024,
+          "instances": 3,
+          "container": {
+            "docker": {
+              "image": "neunhoef/arangodb-marathon",
+              "network": "BRIDGE",
+              "forcePullImage": true,
+              "portMappings": [
+                {
+                  "containerPort": 8529,
+                  "hostPort": 0,
+                  "protocol": "tcp"
+                }
+              ]
+            },
+            "type": "DOCKER",
+            "volumes": [
+              {
+                "hostPath": "data",
+                "containerPath": "/var/lib/arangodb3",
+                "mode": "RW"
+              },
+              {
+                "containerPath": "data",
+                "persistent": {
+                  "size": 1024
+                },
+                "mode": "RW"
+              }
+            ]
+          },
+          "env": {
+            "AGENCY_SIZE": "3"
+          },
+          "constraints": [
+            [
+              "hostname",
+              "UNIQUE"
+            ]
+          ],
+          "labels": {},
+          "healthChecks": [
+            {
+              "path": "/_api/version",
+              "portIndex": 0,
+              "protocol": "HTTP",
+              "gracePeriodSeconds": 300,
+              "intervalSeconds": 30,
+              "timeoutSeconds": 5,
+              "maxConsecutiveFailures": 0,
+              "ignoreHttp1xx": false
+            }
+          ],
+          "residency": {
+            "relaunchEscalationTimeoutSeconds": 3600,
+            "taskLostBehavior": "WAIT_FOREVER"
+          }
+        }
+      ]
+    },
+    {
+      "id": "/arangodb/servers",
+      "dependencies": [ "/arangodb/agency" ],
+      "apps": [
+        {
+          "id": "/arangodb/servers/dbservers",
+          "cpus": 0.5,
+          "mem": 2048,
+          "disk": 2048,
+          "instances": 2,
+          "container": {
+            "docker": {
+              "image": "neunhoef/arangodb-marathon",
+              "network": "BRIDGE",
+              "forcePullImage": true,
+              "portMappings": [
+                {
+                  "containerPort": 8529,
+                  "hostPort": 0,
+                  "protocol": "tcp"
+                }
+              ]
+            },
+            "type": "DOCKER",
+            "volumes": [
+              {
+                "hostPath": "data",
+                "containerPath": "/var/lib/arangodb3",
+                "mode": "RW"
+              },
+              {
+                "containerPath": "data",
+                "persistent": {
+                  "size": 1024
+                },
+                "mode": "RW"
+              }
+            ]
+          },
+          "env": {
+            "AGENCY_SIZE": "3"
+          },
+          "constraints": [["hostname", "UNIQUE"]],
+          "labels": {},
+          "healthChecks":
+          [{"path": "/_api/version", "portIndex": 0, "protocol": "HTTP",
+            "gracePeriodSeconds": 300, "intervalSeconds": 30, "timeoutSeconds": 5, 
+            "maxConsecutiveFailures": 0, "ignoreHttp1xx": false }
+          ],
+          "residency": {
+            "taskLostBehaviour": "WAIT_FOREVER",
+            "relaunchEscalationTimeoutSeconds": 3600
+          }
+        },
+        {
+          "id": "/arangodb/servers/coordinators",
+          "cpus": 0.5,
+          "mem": 2048,
+          "disk": 1024,
+          "instances": 1,
+          "container": {
+            "docker": {
+              "image": "neunhoef/arangodb-marathon",
+              "network": "BRIDGE",
+              "forcePullImage": true,
+              "portMappings": [
+                {
+                  "containerPort": 8529,
+                  "hostPort": 0,
+                  "protocol": "tcp"
+                }
+              ]
+            },
+            "type": "DOCKER"
+          },
+          "env": {
+            "AGENCY_SIZE": "3"
+          },
+          "labels": {},
+          "healthChecks":
+          [{"path": "/_api/version", "portIndex": 0, "protocol": "HTTP",
+            "gracePeriodSeconds": 300, "intervalSeconds": 30, "timeoutSeconds": 5, 
+            "maxConsecutiveFailures": 0, "ignoreHttp1xx": false }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

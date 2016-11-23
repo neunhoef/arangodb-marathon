@@ -1,0 +1,8 @@
+"labels":{
+  "MARATHON_SINGLE_INSTANCE_APP": "true"
+}
+
+"upgradeStrategy":{
+  "minimumHealthCapacity": 0,
+  "maximumOverCapacity": 0
+}

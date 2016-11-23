@@ -28,6 +28,27 @@ var coordinatorDiskLimit uint
 var coordinatorNumber uint
 
 var allSkeleton string = `{
+  "id": "%s",
+  "groups": [
+	  {
+      "id": "%s/agency",
+      "apps": [
+%s
+      ]
+    },
+    {
+      "id": "%s/servers",
+			"dependencies": [ "%s/agency" ],
+      "apps": [
+%s,
+%s
+      ]
+    }
+  ]
+}
+`
+
+var appSkeleton string = `{
   "id": "%s%s",
   "cpus": %.3f,
   "mem": %d,
@@ -97,8 +118,8 @@ func makeAgencyJSON() (bufAll bytes.Buffer) {
 	bufAll = bytes.Buffer{}
 	bufVol := bytes.Buffer{}
 	fmt.Fprintf(&bufVol, volumeSkeleton, agentDiskLimit)
-	fmt.Fprintf(&bufAll, allSkeleton, clusterName, "agency", agentCPULimit,
-		agentMemLimit, agentDiskLimit, agentNumber, "",
+	fmt.Fprintf(&bufAll, appSkeleton, clusterName, "/agency/agents",
+	  agentCPULimit, agentMemLimit, agentDiskLimit, agentNumber, "",
 		string(bufVol.Bytes()), agentNumber, constraintSkeleton,
 		residencySkeleton)
 	return
@@ -107,8 +128,10 @@ func makeAgencyJSON() (bufAll bytes.Buffer) {
 func makeCoordinatorJSON() (bufAll bytes.Buffer) {
 	bufAll = bytes.Buffer{}
 	bufMin := bytes.Buffer{}
-	fmt.Fprintf(&bufMin, minuteManSkeleton, clusterName, clusterName)
-	fmt.Fprintf(&bufAll, allSkeleton, clusterName, "coordinators",
+	strippedClusterName := clusterName[1:]
+	fmt.Fprintf(&bufMin, minuteManSkeleton, strippedClusterName,
+	            strippedClusterName)
+	fmt.Fprintf(&bufAll, appSkeleton, clusterName, "/servers/coordinators",
 		coordinatorCPULimit, coordinatorMemLimit, coordinatorDiskLimit,
 		coordinatorNumber, string(bufMin.Bytes()), "", agentNumber,
 		"", "")
@@ -119,45 +142,48 @@ func makeDBServerJSON() (bufAll bytes.Buffer) {
 	bufAll = bytes.Buffer{}
 	bufVol := bytes.Buffer{}
 	fmt.Fprintf(&bufVol, volumeSkeleton, dbserverDiskLimit)
-	fmt.Fprintf(&bufAll, allSkeleton, clusterName, "dbservers", dbserverCPULimit,
-		dbserverMemLimit, dbserverDiskLimit, dbserverNumber, "",
+	fmt.Fprintf(&bufAll, appSkeleton, clusterName, "/servers/dbservers",
+	  dbserverCPULimit, dbserverMemLimit, dbserverDiskLimit, dbserverNumber, "",
 		string(bufVol.Bytes()), agentNumber, constraintSkeleton,
 		residencySkeleton)
 	return
 }
 
-func checkDeployment(instancetype string, maker func() bytes.Buffer) error {
-	r, e := http.Get(marathonURL + "/v2/apps/" + clusterName + instancetype)
+func checkDeployment(json bytes.Buffer) error {
+	r, e := http.Get(marathonURL + "/v2/groups" + clusterName)
 	if e != nil || r == nil {
-		fmt.Println("Error contacting Marathon for type", instancetype, ":", e)
+		fmt.Println("Error contacting Marathon:", e)
 		return e
 	}
 	r.Body.Close()
 	if r.StatusCode == http.StatusOK {
-		fmt.Println("Found Marathon deployment for type", instancetype, ", good.")
+		fmt.Println("Found Marathon deployment for name", clusterName, ", good.")
 		return nil
 	}
-	json := maker()
 	fmt.Println("Trying to POST to Marathon:", string(json.Bytes()))
-	r, e = http.Post(marathonURL+"/v2/apps", "application/json", &json)
+	r, e = http.Post(marathonURL+"/v2/groups", "application/json", &json)
 	if e != nil || r == nil {
-		fmt.Println("Error POSTing to Marathon for type", instancetype, ":", e)
+		fmt.Println("Error POSTing to Marathon:", e)
 		return e
 	}
 	body, _ := ioutil.ReadAll(r.Body)
 	r.Body.Close()
 	if r.StatusCode != http.StatusCreated {
-		fmt.Println("Error response from Marathon for type", instancetype, ":",
-			r.StatusCode, string(body))
+		fmt.Println("Error response from Marathon:", r.StatusCode, string(body))
 		return errors.New("Error response from Marathon:" + string(body))
 	}
 	return nil
 }
 
 func checkDeployments() {
-	checkDeployment("agency", makeAgencyJSON)
-	checkDeployment("dbservers", makeDBServerJSON)
-	checkDeployment("coordinators", makeCoordinatorJSON)
+	agencyJSON := makeAgencyJSON()
+  dbserverJSON := makeDBServerJSON()
+	coordinatorJSON := makeCoordinatorJSON()
+  bufAll := bytes.Buffer{}
+	fmt.Fprintf(&bufAll, allSkeleton, clusterName, clusterName,
+	  string(agencyJSON.Bytes()), clusterName, clusterName,
+		string(dbserverJSON.Bytes()), string(coordinatorJSON.Bytes()))
+	checkDeployment(bufAll)
 }
 
 func serveStatus(w http.ResponseWriter, r *http.Request) {
@@ -165,6 +191,28 @@ func serveStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveShutdown(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Got shutdown request, trying to talk to Marathon...")
+
+	tr := &http.Transport{
+	  DisableKeepAlives:   false,
+		MaxIdleConnsPerHost: 5,
+	}
+	client := &http.Client{Transport: tr}
+	req, _ := http.NewRequest("DELETE", marathonURL + "/v2/groups" + clusterName,
+                            nil)
+	rr, ee := client.Do(req)
+	if ee != nil || rr == nil {
+		fmt.Println("Error contacting Marathon:", ee)
+	  w.Write([]byte(`{"ok": false}`))
+		return
+	}
+	rr.Body.Close()
+	if rr.StatusCode == http.StatusOK {
+		fmt.Println("Deleted Marathon deployment for name", clusterName, ", good.")
+	  w.Write([]byte(`{"ok": true}`))
+		return
+	}
+	w.Write([]byte(`{"ok": false}`))
 }
 
 func serveHttp() {
@@ -205,9 +253,6 @@ func main() {
 	flag.UintVar(&coordinatorNumber, "coordinatorNumber", 2,
 		"Number of coordinators")
 	flag.Parse()
-	for len(clusterName) > 0 && clusterName[0] == '/' {
-		clusterName = clusterName[1:]
-	}
 
 	go serveHttp()
 
