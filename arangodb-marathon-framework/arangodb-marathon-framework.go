@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	//"encoding/json"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -119,7 +119,7 @@ func makeAgencyJSON() (bufAll bytes.Buffer) {
 	bufVol := bytes.Buffer{}
 	fmt.Fprintf(&bufVol, volumeSkeleton, agentDiskLimit)
 	fmt.Fprintf(&bufAll, appSkeleton, clusterName, "/agency/agents",
-	  agentCPULimit, agentMemLimit, agentDiskLimit, agentNumber, "",
+		agentCPULimit, agentMemLimit, agentDiskLimit, agentNumber, "",
 		string(bufVol.Bytes()), agentNumber, constraintSkeleton,
 		residencySkeleton)
 	return
@@ -130,7 +130,7 @@ func makeCoordinatorJSON() (bufAll bytes.Buffer) {
 	bufMin := bytes.Buffer{}
 	strippedClusterName := clusterName[1:]
 	fmt.Fprintf(&bufMin, minuteManSkeleton, strippedClusterName,
-	            strippedClusterName)
+		strippedClusterName)
 	fmt.Fprintf(&bufAll, appSkeleton, clusterName, "/servers/coordinators",
 		coordinatorCPULimit, coordinatorMemLimit, coordinatorDiskLimit,
 		coordinatorNumber, string(bufMin.Bytes()), "", agentNumber,
@@ -143,7 +143,7 @@ func makeDBServerJSON() (bufAll bytes.Buffer) {
 	bufVol := bytes.Buffer{}
 	fmt.Fprintf(&bufVol, volumeSkeleton, dbserverDiskLimit)
 	fmt.Fprintf(&bufAll, appSkeleton, clusterName, "/servers/dbservers",
-	  dbserverCPULimit, dbserverMemLimit, dbserverDiskLimit, dbserverNumber, "",
+		dbserverCPULimit, dbserverMemLimit, dbserverDiskLimit, dbserverNumber, "",
 		string(bufVol.Bytes()), agentNumber, constraintSkeleton,
 		residencySkeleton)
 	return
@@ -177,13 +177,62 @@ func checkDeployment(json bytes.Buffer) error {
 
 func checkDeployments() {
 	agencyJSON := makeAgencyJSON()
-  dbserverJSON := makeDBServerJSON()
+	dbserverJSON := makeDBServerJSON()
 	coordinatorJSON := makeCoordinatorJSON()
-  bufAll := bytes.Buffer{}
+	bufAll := bytes.Buffer{}
 	fmt.Fprintf(&bufAll, allSkeleton, clusterName, clusterName,
-	  string(agencyJSON.Bytes()), clusterName, clusterName,
+		string(agencyJSON.Bytes()), clusterName, clusterName,
 		string(dbserverJSON.Bytes()), string(coordinatorJSON.Bytes()))
 	checkDeployment(bufAll)
+}
+
+type Task struct {
+	Host    string
+	Ports   []int
+	Id      string
+	SlaveId string
+}
+
+const retries int = 300
+
+func findTasks(appId string) (res []Task) {
+	for count := 1; count <= retries; count++ {
+		resp, err := http.Get(marathonURL + "/v2/apps" + appId)
+		if err != nil || resp.Body == nil || resp == nil {
+			fmt.Fprintln(os.Stderr, "Error querying Marathon:", err, resp,
+				"retry", count, "out of", retries)
+			if count >= retries {
+				return make([]Task, 0)
+			}
+		} else {
+			defer resp.Body.Close()
+			respBody, _ := ioutil.ReadAll(resp.Body)
+			fmt.Fprintln(os.Stderr, "Body read:\n%s\n", string(respBody))
+			var result map[string]map[string]interface{}
+			json.Unmarshal(respBody, &result)
+			app := result["app"]
+			var taskArray []interface{}
+			if app["tasks"] != nil {
+				taskArray = app["tasks"].([]interface{})
+			}
+			res = make([]Task, 0, len(taskArray))
+			for i := 0; i < len(taskArray); i++ {
+				task := taskArray[i].(map[string]interface{})
+				host := task["host"].(string)
+				ports := task["ports"].([]interface{})
+				id := task["id"].(string)
+				slaveId := task["slaveId"].(string)
+				portSlice := make([]int, len(ports))
+				for j := 0; j < len(ports); j++ {
+					portSlice = append(portSlice, int(ports[j].(float64)))
+				}
+				res = append(res, Task{host, portSlice, id, slaveId})
+			}
+			return
+		}
+		time.Sleep(1000000000)
+	}
+	return make([]Task, 0)
 }
 
 func serveStatus(w http.ResponseWriter, r *http.Request) {
@@ -194,22 +243,22 @@ func serveShutdown(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Got shutdown request, trying to talk to Marathon...")
 
 	tr := &http.Transport{
-	  DisableKeepAlives:   false,
+		DisableKeepAlives:   false,
 		MaxIdleConnsPerHost: 5,
 	}
 	client := &http.Client{Transport: tr}
-	req, _ := http.NewRequest("DELETE", marathonURL + "/v2/groups" + clusterName,
-                            nil)
+	req, _ := http.NewRequest("DELETE", marathonURL+"/v2/groups"+clusterName,
+		nil)
 	rr, ee := client.Do(req)
 	if ee != nil || rr == nil {
 		fmt.Println("Error contacting Marathon:", ee)
-	  w.Write([]byte(`{"ok": false}`))
+		w.Write([]byte(`{"ok": false}`))
 		return
 	}
 	rr.Body.Close()
 	if rr.StatusCode == http.StatusOK {
 		fmt.Println("Deleted Marathon deployment for name", clusterName, ", good.")
-	  w.Write([]byte(`{"ok": true}`))
+		w.Write([]byte(`{"ok": true}`))
 		return
 	}
 	w.Write([]byte(`{"ok": false}`))
