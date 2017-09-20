@@ -2,6 +2,9 @@ Immediately:
 
  - coordinator label for MinuteMan
  - scaling via UI: watch numberOfServers
+ - use MESOS containerizer
+ - support mount volumes
+ - check with strict mode
 
 Later:
 
