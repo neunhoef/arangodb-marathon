@@ -55,7 +55,6 @@ case "$TYPE" in
         echo Starting DBserver...
         exec /usr/sbin/arangod --cluster.my-address tcp://${HOST}:${PORT0} \
                                --server.endpoint tcp://0.0.0.0:8529 \
-                               --cluster.my-local-info ${HOST}:${PORT0} \
                                --cluster.my-role PRIMARY \
                                --server.authentication false \
                                $AGENTS "$@"
@@ -64,7 +63,6 @@ case "$TYPE" in
         echo Starting Coordinator...
         exec /usr/sbin/arangod --cluster.my-address tcp://${HOST}:${PORT0} \
                                --server.endpoint tcp://0.0.0.0:8529 \
-                               --cluster.my-local-info ${HOST}:${PORT0} \
                                --cluster.my-role COORDINATOR \
                                --server.authentication false \
                                $AGENTS "$@"

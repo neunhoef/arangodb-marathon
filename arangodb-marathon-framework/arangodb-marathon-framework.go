@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+var shutdownChannel chan struct{}
+
 var clusterName string
 var marathonURL string
 var agentCPULimit float64
@@ -199,7 +201,7 @@ func findTasks(appId string) (res []Task) {
 	for count := 1; count <= retries; count++ {
 		resp, err := http.Get(marathonURL + "/v2/apps" + appId)
 		if err != nil || resp.Body == nil || resp == nil {
-			fmt.Fprintln(os.Stderr, "Error querying Marathon:", err, resp,
+			fmt.Println("Error querying Marathon:", err, resp,
 				"retry", count, "out of", retries)
 			if count >= retries {
 				return make([]Task, 0)
@@ -207,7 +209,7 @@ func findTasks(appId string) (res []Task) {
 		} else {
 			defer resp.Body.Close()
 			respBody, _ := ioutil.ReadAll(resp.Body)
-			fmt.Fprintln(os.Stderr, "Body read:\n%s\n", string(respBody))
+			fmt.Fprintf(os.Stderr, "Body read:\n%s\n", string(respBody))
 			var result map[string]map[string]interface{}
 			json.Unmarshal(respBody, &result)
 			app := result["app"]
@@ -222,7 +224,7 @@ func findTasks(appId string) (res []Task) {
 				ports := task["ports"].([]interface{})
 				id := task["id"].(string)
 				slaveId := task["slaveId"].(string)
-				portSlice := make([]int, len(ports))
+				portSlice := make([]int, 0, len(ports))
 				for j := 0; j < len(ports); j++ {
 					portSlice = append(portSlice, int(ports[j].(float64)))
 				}
@@ -230,7 +232,7 @@ func findTasks(appId string) (res []Task) {
 			}
 			return
 		}
-		time.Sleep(1000000000)
+		time.Sleep(time.Second)
 	}
 	return make([]Task, 0)
 }
@@ -275,6 +277,50 @@ func serveHttp() {
 	http.ListenAndServe("0.0.0.0:"+port, nil)
 }
 
+func superviseCluster() {
+	// We regularly ask Marathon about the cluster deployment. This way
+	// we find the coordinator endpoints and configure the number of servers
+	// there. Then we watch this number and if it changes, we change the
+	// Marathon deployment for the cluster. This allows UI scaling.
+	var initialized bool = false
+	for {
+		tasks := findTasks("/" + clusterName + "/servers/coordinators")
+		fmt.Printf("Coordinator tasks found via Marathon: %v\n", tasks)
+		if len(tasks) > 0 && !initialized {
+			// Tell the cluster its initial size:
+			buffer := bytes.Buffer{}
+			fmt.Fprintf(&buffer,
+				"{\"numberOfCoordinators\": %d, \"numberOfDBServers\": %d}",
+				coordinatorNumber, dbserverNumber)
+			client := &http.Client{}
+			url := fmt.Sprintf(
+				"http://%s:%d/_admin/cluster/numberOfServers",
+				tasks[0].Host, tasks[0].Ports[0])
+			request, _ := http.NewRequest("PUT", url, &buffer)
+			r, e := client.Do(request)
+			if e != nil {
+				fmt.Println("Error contacting coordinator:", e)
+			} else {
+				r.Body.Close()
+				if r.StatusCode == 200 {
+					initialized = true
+					fmt.Println("Successfully initialized cluster.")
+				} else {
+					fmt.Println("Cluster response was HTTP", r.StatusCode)
+				}
+			}
+		}
+
+		select {
+		case <-time.After(time.Second * 10):
+			// Continue
+		case <-shutdownChannel:
+			// shutdown is done, let's stop the loop
+			break
+		}
+	}
+}
+
 func main() {
 	flag.StringVar(&clusterName, "name", "arangodb", "name of ArangoDB cluster")
 	flag.StringVar(&marathonURL, "marathon", "http://marathon.mesos:8080",
@@ -304,12 +350,19 @@ func main() {
 	flag.Parse()
 
 	go serveHttp()
+	go superviseCluster()
 
-	checkDeployments()
 	count := 0
 	for {
-		time.Sleep(10000000000)
+		checkDeployments()
 		count++
-		fmt.Printf("Living %d\n", count)
+		select {
+		case <-time.After(time.Second * 10):
+			// Continue
+		case <-shutdownChannel:
+			// shutdown is done, let's stop the loop
+			break
+		}
 	}
+	time.Sleep(time.Hour)
 }

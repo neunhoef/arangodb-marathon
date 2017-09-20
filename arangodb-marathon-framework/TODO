@@ -1,13 +1,7 @@
 Immediately:
 
- - offer HTTP/REST service in framework
- - offer shutdown method
- - clean up persistent volumes and reservations
  - coordinator label for MinuteMan
-
-Soon:
-
- - scaling via UI: watch Agency
+ - scaling via UI: watch numberOfServers
 
 Later:
 
@@ -17,5 +11,4 @@ Later:
 Challenges:
 
  - stop agency from scaling?
- - secondaries? -> more support from within ArangoDB, planned anyway
 
